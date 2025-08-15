@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 
 // Токен бота
-const token = '8441397118:AAEG-YaJMGTJyz23fXyP-g8HHE8oWHk_soQ';
+const token = process.env.BOT_TOKEN || '8441397118:AAEG-YaJMGTJyz23fXyP-g8HHE8oWHk_soQ';
 const bot = new TelegramBot(token, {polling: true});
 
 // Хранилище пользователей (в продакшене лучше использовать базу данных)
@@ -21,7 +21,7 @@ const INSTAGRAM_POST = 'https://www.instagram.com/reel/DNYrXLyo4XU/?igsh=MWNrcTY
 const REQUIRED_USERNAME = 'childpsy_khatsevych';
 
 // ID администратора (ваш Telegram ID)
-const ADMIN_ID = '137269914';
+const ADMIN_ID = process.env.ADMIN_ID || '137269914';
 
 // Клавиатуры
 const languageKeyboard = {
@@ -458,11 +458,12 @@ bot.on('callback_query', async (callbackQuery) => {
 bot.on('message', async (msg) => {
     if (msg.text && !msg.text.startsWith('/')) {
         const chatId = msg.chat.id;
-        const user = getUser(chatId);
         const text = msg.text;
-        const lang = user.language;
-
+        
         try {
+            const user = getUser(chatId);
+            const lang = user.language;
+
             // Если ожидаем ввод username
             if (user.awaitingUsername) {
                 const username = text.trim().replace('@', '');
@@ -499,10 +500,10 @@ bot.on('message', async (msg) => {
                 return;
             }
 
-            // Обычные команды меню
-            const user = getUser(chatId);
+            // Обновляем активность пользователя
             user.lastActivity = new Date();
             
+            // Обычные команды меню
             switch (text) {
                 case '📖 Отримати гайд':
                 case '📖 Получить гайд':

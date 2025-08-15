@@ -1,13 +1,12 @@
 {
   "name": "telegram-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Telegram bot for child psychologist",
+  "main": "bot.js",
   "scripts": {
-    "scripts": {
-  "start": "node bot.js",
-  "test": "echo \"Error: no test specified\" && exit 1"
-}
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -16,6 +15,3 @@
     "node-telegram-bot-api": "^0.66.0"
   }
 }
-echo "node_modules/
-.env
-*.log" > .gitignore
