@@ -724,3 +724,23 @@ console.log('📱 Instagram: @childpsy_khatsevych');
 console.log('🌐 Украинский гайд:', GUIDES.ua);
 console.log('🌐 Русский гайд:', GUIDES.ru);
 console.log('✅ Администратор настроен:', ADMIN_ID);
+// HTTP сервер для Render (фиктивный)
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.json({
+        status: 'Telegram Bot is running!',
+        uptime: process.uptime(),
+        users: users.size
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date() });
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 HTTP server running on port ${PORT}`);
+});
