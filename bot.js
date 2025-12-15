@@ -2,7 +2,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
 // Токен бота
-const token = process.env.BOT_TOKEN || '8441397118:AAEG-YaJMGTJyz23fXyP-g8HHE8oWHk_soQ';
+const token = process.env.BOT_TOKEN;
+if (!token) throw new Error("BOT_TOKEN is not set");
 const bot = new TelegramBot(token, {polling: true});
 
 // ID администратора
