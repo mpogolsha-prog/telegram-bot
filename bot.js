@@ -1,24 +1,73 @@
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
-// ⚠️ Токен только из ENV (не хардкодим)
+// ===== ENV =====
 const token = process.env.BOT_TOKEN;
-if (!token) {
-  throw new Error('BOT_TOKEN is not set in environment variables');
-}
+if (!token) throw new Error('BOT_TOKEN is not set in environment variables');
 
-const bot = new TelegramBot(token, { polling: true });
-
-// ID администратора
 const ADMIN_ID = process.env.ADMIN_ID || '137269914';
-
-// Хранилище пользователей
-const users = new Map();
-
-// Instagram данные
 const INSTAGRAM_PROFILE = 'https://www.instagram.com/childpsy_khatsevych';
 
-// Ссылки на гайды
+// ===== Bot =====
+const bot = new TelegramBot(token, { polling: true });
+
+// --- FIX 409: корректно закрываем polling при остановке процесса ---
+const shutdown = async (signal) => {
+  try {
+    console.log(`🛑 Received ${signal}, stopping polling...`);
+    await bot.stopPolling();
+  } catch (e) {}
+  process.exit(0);
+};
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+// --- FIX 409: если Telegram ругается на второй getUpdates — ждём и запускаем polling заново ---
+let pollingRestartTimer = null;
+bot.on('polling_error', async (err) => {
+  const code = err?.response?.body?.error_code;
+  const desc = err?.response?.body?.description || err?.message || '';
+
+  if (code === 409 || String(desc).includes('409 Conflict')) {
+    if (pollingRestartTimer) return;
+    console.log('⚠️ 409 Conflict detected. Restart polling in 5s...');
+
+    try { await bot.stopPolling(); } catch (e) {}
+
+    pollingRestartTimer = setTimeout(async () => {
+      pollingRestartTimer = null;
+      try {
+        await bot.startPolling();
+        console.log('✅ Polling restarted');
+      } catch (e) {
+        console.log('❌ Failed to restart polling:', e.message);
+      }
+    }, 5000);
+
+    return;
+  }
+
+  console.log('polling_error:', desc);
+});
+
+// ===== Helpers =====
+const users = new Map();
+
+const escapeHTML = (s = '') =>
+  s.replace(/&/g, '&amp;')
+   .replace(/</g, '&lt;')
+   .replace(/>/g, '&gt;');
+
+const validateUsername = (username) => /^[a-zA-Z0-9._]{1,30}$/.test(username);
+
+// Заглушка: твоя функция проверки Instagram (оставь свою реализацию)
+async function checkBasicInstagramConditions(username) {
+  // если у тебя есть реальная проверка — вставь сюда
+  return { success: true };
+}
+
+// ===== Guides =====
 const GUIDES = {
   adaptation: {
     ua: 'https://kids-adaptation.netlify.app',
@@ -65,7 +114,7 @@ const getGuideUrl = (guideKey, lang) => {
   return lang === 'ru' ? (guide.ru || guide.ua) : guide.ua;
 };
 
-// ===== Клавиатуры =====
+// ===== Keyboards =====
 const languageKeyboard = {
   reply_markup: {
     inline_keyboard: [
@@ -107,36 +156,27 @@ const getMainKeyboard = (lang) => {
 
 const getGuidesListKeyboard = (lang) => {
   const buttons = [];
-
   for (const [key, guide] of Object.entries(GUIDES)) {
     const title = lang === 'ua' ? guide.title_ua : guide.title_ru;
     buttons.push([{
       text: `${guide.emoji} ${title}`,
-      // ✅ фикс: двоеточие вместо underscore (иначе ключи с _ ломаются)
-      callback_data: `guide:${key}`
+      callback_data: `guide:${key}` // ✅ важно
     }]);
   }
-
   buttons.push([{
     text: lang === 'ua' ? '🔙 Назад в меню' : '🔙 Назад в меню',
     callback_data: 'back_to_menu'
   }]);
 
-  return {
-    reply_markup: {
-      inline_keyboard: buttons
-    }
-  };
+  return { reply_markup: { inline_keyboard: buttons } };
 };
 
 const getGuideKeyboard = (guideKey, lang) => {
   const url = getGuideUrl(guideKey, lang);
-
   return {
     reply_markup: {
       inline_keyboard: [
         [{ text: lang === 'ua' ? '📖 Відкрити гайд' : '📖 Открыть гайд', url }],
-        // ✅ фикс: двоеточие вместо underscore
         [{ text: lang === 'ua' ? '✅ Я виконав всі умови!' : '✅ Я выполнил все условия!', callback_data: `request:${guideKey}` }],
         [{ text: '📱 Перейти в Instagram', url: INSTAGRAM_PROFILE }],
         [{ text: lang === 'ua' ? '🔙 Назад до списку' : '🔙 Назад к списку', callback_data: 'show_guides' }]
@@ -145,7 +185,7 @@ const getGuideKeyboard = (guideKey, lang) => {
   };
 };
 
-// ===== Тексты сообщений =====
+// ===== Messages =====
 const MESSAGES = {
   ua: {
     welcome: `Привіт! 👋  
@@ -159,9 +199,9 @@ const MESSAGES = {
 
 Оберіть гайд, який вас цікавить:`,
 
-    guideInfo: (guide) => `${guide.emoji} **${guide.title_ua}**
+    guideInfo: (guide) => `${guide.emoji} <b>${escapeHTML(guide.title_ua)}</b>
 
-📝 ${guide.description_ua}
+📝 ${escapeHTML(guide.description_ua)}
 
 Щоб отримати цей гайд:
 ✅ Підпишись на @childpsy_khatsevych в Instagram
@@ -210,8 +250,6 @@ ${INSTAGRAM_PROFILE}
 
 Буду рада допомогти вашій родині! 🌿`,
 
-    languageChanged: 'Мова змінена на українську 🇺🇦',
-
     enterUsername: 'Напишіть, будь ласка, ваш Instagram username (без @):',
     invalidUsername: 'Некоректний username. Спробуйте ще раз (без пробілів, без посилань).',
     checking: 'Перевіряю... ⏳'
@@ -229,9 +267,9 @@ ${INSTAGRAM_PROFILE}
 
 Выберите гайд, который вас интересует:`,
 
-    guideInfo: (guide) => `${guide.emoji} **${guide.title_ru}**
+    guideInfo: (guide) => `${guide.emoji} <b>${escapeHTML(guide.title_ru)}</b>
 
-📝 ${guide.description_ru}
+📝 ${escapeHTML(guide.description_ru)}
 
 Чтобы получить этот гайд:
 ✅ Подпишись на @childpsy_khatsevych в Instagram
@@ -280,15 +318,13 @@ ${INSTAGRAM_PROFILE}
 
 Буду рада помочь вашей семье! 🌿`,
 
-    languageChanged: 'Язык изменен на русский 🇷🇺',
-
     enterUsername: 'Напишите ваш Instagram username (без @):',
     invalidUsername: 'Некорректный username. Попробуйте еще раз (без пробелов, без ссылок).',
     checking: 'Проверяю... ⏳'
   }
 };
 
-// ===== Пользователь =====
+// ===== User =====
 const getUser = (chatId) => {
   if (!users.has(chatId)) {
     users.set(chatId, {
@@ -309,15 +345,6 @@ const getUser = (chatId) => {
   return users.get(chatId);
 };
 
-// Примитивная проверка username (без ссылок/пробелов)
-const validateUsername = (username) => /^[a-zA-Z0-9._]{1,30}$/.test(username);
-
-// Заглушка: твоя функция проверки Instagram (оставь свою реализацию)
-async function checkBasicInstagramConditions(username) {
-  // если у тебя есть реальная проверка — вставь сюда
-  return { success: true };
-}
-
 // ===== /start =====
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
@@ -331,7 +358,7 @@ bot.onText(/\/start/, async (msg) => {
   await bot.sendMessage(chatId, 'Выберите язык / Оберіть мову:', languageKeyboard);
 });
 
-// ===== callback =====
+// ===== callbacks =====
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
@@ -342,7 +369,8 @@ bot.on('callback_query', async (callbackQuery) => {
       const lang = data.split('_')[1];
       user.language = lang;
 
-      await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+      // delete может упасть — игнорируем
+      try { await bot.deleteMessage(chatId, callbackQuery.message.message_id); } catch (e) {}
       await bot.sendMessage(chatId, MESSAGES[lang].welcome, getMainKeyboard(lang));
 
     } else if (data === 'show_guides') {
@@ -353,17 +381,15 @@ bot.on('callback_query', async (callbackQuery) => {
       });
 
     } else if (data.startsWith('guide:')) {
-      // ✅ фикс: получаем ключ полностью
       const guideKey = data.slice('guide:'.length);
       const guide = GUIDES[guideKey];
 
       if (guide) {
         user.currentGuide = guideKey;
-
         await bot.editMessageText(MESSAGES[user.language].guideInfo(guide), {
           chat_id: chatId,
           message_id: callbackQuery.message.message_id,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...getGuideKeyboard(guideKey, user.language)
         });
       } else {
@@ -371,7 +397,6 @@ bot.on('callback_query', async (callbackQuery) => {
       }
 
     } else if (data.startsWith('request:')) {
-      // ✅ фикс: получаем ключ полностью
       const guideKey = data.slice('request:'.length);
       user.currentGuide = guideKey;
       user.awaitingUsername = true;
@@ -380,7 +405,7 @@ bot.on('callback_query', async (callbackQuery) => {
       await bot.sendMessage(chatId, MESSAGES[user.language].enterUsername);
 
     } else if (data === 'back_to_menu') {
-      await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+      try { await bot.deleteMessage(chatId, callbackQuery.message.message_id); } catch (e) {}
       await bot.sendMessage(chatId, MESSAGES[user.language].welcome, getMainKeyboard(user.language));
     }
   } catch (error) {
@@ -400,7 +425,6 @@ bot.on('message', async (msg) => {
 
       user.lastActivity = new Date();
 
-      // ожидание Instagram username
       if (user.awaitingUsername) {
         const username = text.trim().replace('@', '');
 
@@ -444,6 +468,7 @@ bot.on('message', async (msg) => {
 
       switch (text) {
         case '📚 Вибрати гайд':
+        case '📚 Выбрать gайд':
         case '📚 Выбрать гайд':
           await bot.sendMessage(chatId, MESSAGES[lang].guidesList, getGuidesListKeyboard(lang));
           break;
@@ -587,16 +612,6 @@ bot.onText(/\/today/, async (msg) => {
   await bot.sendMessage(chatId, message);
 });
 
-// Ошибки
-bot.on('error', (error) => {
-  console.log('Bot error:', error);
-});
-
-console.log('🤖 Бот запущен!');
-console.log('📱 Instagram: @childpsy_khatsevych');
-console.log('📚 Количество гайдов:', Object.keys(GUIDES).length);
-console.log('✅ Администратор:', ADMIN_ID);
-
 // ===== HTTP server for Render =====
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -621,3 +636,8 @@ app.get('/health', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 HTTP server running on port ${PORT}`);
 });
+
+console.log('🤖 Бот запущен!');
+console.log('📱 Instagram: @childpsy_khatsevych');
+console.log('📚 Количество гайдов:', Object.keys(GUIDES).length);
+console.log('✅ Администратор:', ADMIN_ID);
