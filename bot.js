@@ -11,7 +11,7 @@ const INSTAGRAM_PROFILE = 'https://www.instagram.com/childpsy_khatsevych';
 // ===== Bot =====
 const bot = new TelegramBot(token, { polling: true });
 
-// --- FIX 409: корректно закрываем polling при остановке процесса ---
+// --- FIX 409: graceful shutdown ---
 const shutdown = async (signal) => {
   try {
     console.log(`🛑 Received ${signal}, stopping polling...`);
@@ -19,11 +19,10 @@ const shutdown = async (signal) => {
   } catch (e) {}
   process.exit(0);
 };
-
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGINT', () => shutdown('SIGINT'));
 
-// --- FIX 409: если Telegram ругается на второй getUpdates — ждём и запускаем polling заново ---
+// --- FIX 409: restart polling if conflict ---
 let pollingRestartTimer = null;
 bot.on('polling_error', async (err) => {
   const code = err?.response?.body?.error_code;
@@ -32,9 +31,7 @@ bot.on('polling_error', async (err) => {
   if (code === 409 || String(desc).includes('409 Conflict')) {
     if (pollingRestartTimer) return;
     console.log('⚠️ 409 Conflict detected. Restart polling in 5s...');
-
     try { await bot.stopPolling(); } catch (e) {}
-
     pollingRestartTimer = setTimeout(async () => {
       pollingRestartTimer = null;
       try {
@@ -44,7 +41,6 @@ bot.on('polling_error', async (err) => {
         console.log('❌ Failed to restart polling:', e.message);
       }
     }, 5000);
-
     return;
   }
 
@@ -63,7 +59,6 @@ const validateUsername = (username) => /^[a-zA-Z0-9._]{1,30}$/.test(username);
 
 // Заглушка: твоя функция проверки Instagram (оставь свою реализацию)
 async function checkBasicInstagramConditions(username) {
-  // если у тебя есть реальная проверка — вставь сюда
   return { success: true };
 }
 
@@ -133,6 +128,7 @@ const getMainKeyboard = (lang) => {
         keyboard: [
           ['📚 Вибрати гайд'],
           ['👩‍⚕️ Про психолога', '📞 Контакти'],
+          ['🗓️ Записатися на безкоштовну консультацію'],
           ['🔄 Змінити мову']
         ],
         resize_keyboard: true,
@@ -144,6 +140,7 @@ const getMainKeyboard = (lang) => {
         keyboard: [
           ['📚 Выбрать гайд'],
           ['👩‍⚕️ О психологе', '📞 Контакты'],
+          ['🗓️ Записаться на бесплатную консультацию'],
           ['🔄 Сменить язык']
         ],
         resize_keyboard: true,
@@ -160,7 +157,7 @@ const getGuidesListKeyboard = (lang) => {
     const title = lang === 'ua' ? guide.title_ua : guide.title_ru;
     buttons.push([{
       text: `${guide.emoji} ${title}`,
-      callback_data: `guide:${key}` // ✅ важно
+      callback_data: `guide:${key}`
     }]);
   }
   buttons.push([{
@@ -184,6 +181,27 @@ const getGuideKeyboard = (guideKey, lang) => {
     }
   };
 };
+
+const contactKeyboard = (lang) => ({
+  reply_markup: {
+    keyboard: [
+      [{ text: lang === 'ua' ? '📲 Поділитися контактом' : '📲 Поделиться контактом', request_contact: true }],
+      [lang === 'ua' ? '❌ Скасувати' : '❌ Отмена']
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: true
+  }
+});
+
+const consultReviewKeyboard = (lang) => ({
+  reply_markup: {
+    inline_keyboard: [
+      [{ text: lang === 'ua' ? '✅ Підтвердити та надіслати' : '✅ Подтвердить и отправить', callback_data: 'consult_confirm' }],
+      [{ text: lang === 'ua' ? '✏️ Змінити дані' : '✏️ Изменить данные', callback_data: 'consult_edit' }],
+      [{ text: lang === 'ua' ? '❌ Скасувати' : '❌ Отмена', callback_data: 'consult_cancel' }]
+    ]
+  }
+});
 
 // ===== Messages =====
 const MESSAGES = {
@@ -225,7 +243,7 @@ const MESSAGES = {
 • 5-річне навчання в методі психодинамічної інтегрованої психотерапії немовлят, дітей, підлітків і молоді в Секції дитячої та юнацької психотерапії УСП
 • Додаткова спеціалізована освіта з клінічної психології та психотерапії в психодинамічному підході
 • Підвищення кваліфікації з дитячої психопатології
-• Підвищення кваліфікації з нейропсихологічної корекції дітей і дорослих
+• Підвищення кваліфікації з нейропpsychологічної корекції дітей і дорослих
 • Навчання дитячої арт-терапії
 • Ведуча психологічної трансформаційної гри «У променях сонця»
 
@@ -252,7 +270,28 @@ ${INSTAGRAM_PROFILE}
 
     enterUsername: 'Напишіть, будь ласка, ваш Instagram username (без @):',
     invalidUsername: 'Некоректний username. Спробуйте ще раз (без пробілів, без посилань).',
-    checking: 'Перевіряю... ⏳'
+    checking: 'Перевіряю... ⏳',
+
+    consultStart: `🗓️ Запис на першу безкоштовну консультацію
+
+1) Залиште контакт у Telegram (можна натиснути кнопку нижче, або написати @username)
+2) Вкажіть вік дитини
+3) Опишіть, що саме турбує
+
+Почнемо 👇`,
+    consultAskContact: '📩 Надішліть, будь ласка, ваш контакт (кнопка нижче) або напишіть @username:',
+    consultAskAge: '👶 Вкажіть вік дитини (наприклад: 9 або 9 років):',
+    consultAskProblem: '📝 Коротко опишіть, що саме турбує (1–5 речень):',
+    consultCancel: 'Добре, скасувала запис. Якщо захочете — натисніть кнопку запису знову 🙂',
+    consultDone: '✅ Дякую! Я отримала заявку. Я напишу вам у найближчий час в Telegram/Instagram.',
+    consultReview: (d) => `📝 <b>Перевірте заявку:</b>
+
+📩 <b>Контакт:</b> ${escapeHTML(d.contact)}
+👶 <b>Вік дитини:</b> ${escapeHTML(d.age)}
+🧠 <b>Запит:</b>
+${escapeHTML(d.problem)}
+
+Все вірно?`
   },
 
   ru: {
@@ -320,7 +359,28 @@ ${INSTAGRAM_PROFILE}
 
     enterUsername: 'Напишите ваш Instagram username (без @):',
     invalidUsername: 'Некорректный username. Попробуйте еще раз (без пробелов, без ссылок).',
-    checking: 'Проверяю... ⏳'
+    checking: 'Проверяю... ⏳',
+
+    consultStart: `🗓️ Запись на первую бесплатную консультацию
+
+1) Оставьте контакт в Telegram (можно нажать кнопку ниже или написать @username)
+2) Укажите возраст ребёнка
+3) Опишите, что беспокоит
+
+Начнём 👇`,
+    consultAskContact: '📩 Отправьте, пожалуйста, ваш контакт (кнопка ниже) или напишите @username:',
+    consultAskAge: '👶 Укажите возраст ребёнка (например: 9 или 9 лет):',
+    consultAskProblem: '📝 Коротко опишите, что беспокоит (1–5 предложений):',
+    consultCancel: 'Ок, запись отменена. Если захотите — нажмите кнопку записи снова 🙂',
+    consultDone: '✅ Спасибо! Я получила заявку. Я напишу вам в ближайшее время в Telegram/Instagram.',
+    consultReview: (d) => `📝 <b>Проверьте заявку:</b>
+
+📩 <b>Контакт:</b> ${escapeHTML(d.contact)}
+👶 <b>Возраст ребёнка:</b> ${escapeHTML(d.age)}
+🧠 <b>Запрос:</b>
+${escapeHTML(d.problem)}
+
+Всё верно?`
   }
 };
 
@@ -339,7 +399,12 @@ const getUser = (chatId) => {
       lastActivity: new Date(),
       currentGuide: null,
       awaitingUsername: false,
-      instagramUsername: null
+      instagramUsername: null,
+
+      // консультация
+      awaitingConsultation: false,
+      consultStep: null, // 'contact' | 'age' | 'problem' | 'review'
+      consultData: null
     });
   }
   return users.get(chatId);
@@ -358,7 +423,7 @@ bot.onText(/\/start/, async (msg) => {
   await bot.sendMessage(chatId, 'Выберите язык / Оберіть мову:', languageKeyboard);
 });
 
-// ===== callbacks =====
+// ===== callback_query =====
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
@@ -369,7 +434,6 @@ bot.on('callback_query', async (callbackQuery) => {
       const lang = data.split('_')[1];
       user.language = lang;
 
-      // delete может упасть — игнорируем
       try { await bot.deleteMessage(chatId, callbackQuery.message.message_id); } catch (e) {}
       await bot.sendMessage(chatId, MESSAGES[lang].welcome, getMainKeyboard(lang));
 
@@ -407,209 +471,240 @@ bot.on('callback_query', async (callbackQuery) => {
     } else if (data === 'back_to_menu') {
       try { await bot.deleteMessage(chatId, callbackQuery.message.message_id); } catch (e) {}
       await bot.sendMessage(chatId, MESSAGES[user.language].welcome, getMainKeyboard(user.language));
+
+    } else if (data === 'consult_confirm') {
+      const lang = user.language;
+      const d = user.consultData;
+      if (!d) return;
+
+      const adminMsg =
+`🆕 Заявка на безкоштовну консультацію
+
+👤 Telegram ID: ${user.id}
+👤 TG: ${user.telegramUsername ? '@' + user.telegramUsername : '—'}
+👤 Ім’я: ${(user.firstName || '')} ${(user.lastName || '')}
+
+📩 Контакт: ${d.contact}
+👶 Вік дитини: ${d.age}
+🧠 Запит:
+${d.problem}
+
+🌐 Мова: ${lang}`;
+
+      try {
+        await bot.sendMessage(ADMIN_ID, adminMsg);
+      } catch (e) {
+        console.log('Admin notify error:', e.message);
+      }
+
+      user.awaitingConsultation = false;
+      user.consultStep = null;
+      user.consultData = null;
+
+      await bot.editMessageText(MESSAGES[lang].consultDone, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id
+      });
+      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
+
+    } else if (data === 'consult_edit') {
+      const lang = user.language;
+      user.awaitingConsultation = true;
+      user.consultStep = 'contact';
+      user.consultData = { contact: '', age: '', problem: '' };
+
+      await bot.editMessageText(MESSAGES[lang].consultAskContact, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id
+      });
+      await bot.sendMessage(chatId, MESSAGES[lang].consultAskContact, contactKeyboard(lang));
+
+    } else if (data === 'consult_cancel') {
+      const lang = user.language;
+      user.awaitingConsultation = false;
+      user.consultStep = null;
+      user.consultData = null;
+
+      await bot.editMessageText(MESSAGES[lang].consultCancel, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id
+      });
+      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
     }
+
   } catch (error) {
     console.log('Ошибка обработки callback:', error);
   }
 });
 
-// ===== messages =====
+// ===== message =====
 bot.on('message', async (msg) => {
-  if (msg.text && !msg.text.startsWith('/')) {
-    const chatId = msg.chat.id;
-    const text = msg.text;
+  const chatId = msg.chat?.id;
+  if (!chatId) return;
 
-    try {
-      const user = getUser(chatId);
-      const lang = user.language;
+  const user = getUser(chatId);
+  const lang = user.language;
 
-      user.lastActivity = new Date();
+  // контакт может прийти как msg.contact (даже без текста)
+  const text = msg.text || '';
+  user.lastActivity = new Date();
 
-      if (user.awaitingUsername) {
-        const username = text.trim().replace('@', '');
-
-        if (!validateUsername(username)) {
-          await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
-          return;
-        }
-
-        user.awaitingUsername = false;
-        user.instagramUsername = username;
-
-        await bot.sendMessage(chatId, MESSAGES[lang].checking);
-
-        const checkResult = await checkBasicInstagramConditions(username);
-
-        if (checkResult.success) {
-          const guideKey = user.currentGuide;
-          const guide = GUIDES[guideKey];
-          const guideUrl = getGuideUrl(guideKey, lang);
-
-          if (!guide || !guideUrl) {
-            await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: гайд не знайдено' : 'Ошибка: гайд не найден');
-            return;
-          }
-
-          user.hasReceivedGuide = true;
-          if (!user.receivedGuides.includes(guideKey)) user.receivedGuides.push(guideKey);
-
-          const title = (lang === 'ua' ? guide.title_ua : guide.title_ru);
-
-          const successMessage = lang === 'ua'
-            ? `Вітаю! 🎉\n\n📥 Ось ваш гайд "${title}":\n\n${guideUrl}\n\nДякую за підписку! 💛`
-            : `Поздравляю! 🎉\n\n📥 Вот ваш гайд "${title}":\n\n${guideUrl}\n\nСпасибо за подписку! 💛`;
-
-          await bot.sendMessage(chatId, successMessage, getMainKeyboard(lang));
-        } else {
-          await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
-        }
-        return;
-      }
-
-      switch (text) {
-        case '📚 Вибрати гайд':
-        case '📚 Выбрать gайд':
-        case '📚 Выбрать гайд':
-          await bot.sendMessage(chatId, MESSAGES[lang].guidesList, getGuidesListKeyboard(lang));
-          break;
-
-        case '👩‍⚕️ Про психолога':
-        case '👩‍⚕️ О психологе':
-          await bot.sendMessage(chatId, MESSAGES[lang].about);
-          break;
-
-        case '📞 Контакти':
-        case '📞 Контакты':
-          await bot.sendMessage(chatId, MESSAGES[lang].contacts);
-          break;
-
-        case '🔄 Змінити мову':
-        case '🔄 Сменить язык':
-          await bot.sendMessage(chatId, 'Выберите язык / Оберіть мову:', languageKeyboard);
-          break;
-
-        default:
-          await bot.sendMessage(
-            chatId,
-            lang === 'ua'
-              ? 'Використовуйте кнопки меню для навігації 😊'
-              : 'Используйте кнопки меню для навигации 😊',
-            getMainKeyboard(lang)
-          );
-      }
-    } catch (error) {
-      console.log('Ошибка обработки сообщения:', error);
-    }
-  }
-});
-
-// ===== Admin =====
-bot.onText(/\/admin/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (chatId.toString() !== ADMIN_ID) return;
-
-  const totalUsers = users.size;
-  const withGuide = Array.from(users.values()).filter(u => u.hasReceivedGuide).length;
-
-  const stats = `📊 Статистика бота:
-
-👥 Всего пользователей: ${totalUsers}
-📖 Получили гайд: ${withGuide}
-
-Команды:
-/users - список всех пользователей
-/export - экспорт данных
-/today - статистика за сегодня`;
-
-  await bot.sendMessage(chatId, stats);
-});
-
-bot.onText(/\/users/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (chatId.toString() !== ADMIN_ID) return;
-
-  if (users.size === 0) {
-    await bot.sendMessage(chatId, 'Пользователей нет');
+  // --- отмена из клавиатуры контакта ---
+  if (text === '❌ Скасувати' || text === '❌ Отмена') {
+    user.awaitingConsultation = false;
+    user.consultStep = null;
+    user.consultData = null;
+    await bot.sendMessage(chatId, MESSAGES[lang].consultCancel, getMainKeyboard(lang));
     return;
   }
 
-  let usersList = '👥 Список пользователей:\n\n';
-  let count = 0;
+  // --- консультация: шаги ---
+  if (user.awaitingConsultation) {
+    if (user.consultStep === 'contact') {
+      let contactValue = null;
 
-  for (const [userId, userData] of users) {
-    count++;
-    const status = userData.hasReceivedGuide ? '✅' : '⏳';
-    const telegram = userData.telegramUsername ? `@${userData.telegramUsername}` : 'Нет username';
-    const name = userData.firstName ? `${userData.firstName} ${userData.lastName || ''}`.trim() : 'Имя не указано';
+      if (msg.contact && msg.contact.phone_number) {
+        contactValue = `+${msg.contact.phone_number}`;
+      } else if (text && text.trim()) {
+        contactValue = text.trim();
+      }
 
-    usersList += `${count}. ${status} ${name}\n`;
-    usersList += `   TG: ${telegram}\n`;
-    usersList += `   ID: ${userId}\n`;
-    usersList += `   Дата: ${userData.joinedAt.toLocaleDateString('ru')}\n\n`;
+      if (!contactValue) {
+        await bot.sendMessage(chatId, MESSAGES[lang].consultAskContact, contactKeyboard(lang));
+        return;
+      }
 
-    if (usersList.length > 3500) {
-      await bot.sendMessage(chatId, usersList);
-      usersList = '';
+      user.consultData.contact = contactValue;
+      user.consultStep = 'age';
+      await bot.sendMessage(chatId, MESSAGES[lang].consultAskAge);
+      return;
+    }
+
+    if (user.consultStep === 'age') {
+      const age = (text || '').trim();
+      if (!age || age.length > 20) {
+        await bot.sendMessage(chatId, MESSAGES[lang].consultAskAge);
+        return;
+      }
+
+      user.consultData.age = age;
+      user.consultStep = 'problem';
+      await bot.sendMessage(chatId, MESSAGES[lang].consultAskProblem);
+      return;
+    }
+
+    if (user.consultStep === 'problem') {
+      const problem = (text || '').trim();
+      if (!problem || problem.length < 5) {
+        await bot.sendMessage(chatId, MESSAGES[lang].consultAskProblem);
+        return;
+      }
+
+      user.consultData.problem = problem;
+      user.consultStep = 'review';
+
+      await bot.sendMessage(chatId, MESSAGES[lang].consultReview(user.consultData), {
+        parse_mode: 'HTML',
+        ...consultReviewKeyboard(lang)
+      });
+      return;
+    }
+
+    // review шаг — ждём callback кнопок
+    if (user.consultStep === 'review') {
+      await bot.sendMessage(chatId, lang === 'ua'
+        ? 'Натисніть кнопку ✅ Підтвердити або ✏️ Змінити дані.'
+        : 'Нажмите кнопку ✅ Подтвердить или ✏️ Изменить данные.'
+      );
+      return;
     }
   }
 
-  if (usersList.length > 0) await bot.sendMessage(chatId, usersList);
-});
+  // --- IG username flow ---
+  if (user.awaitingUsername && text && !text.startsWith('/')) {
+    const username = text.trim().replace('@', '');
 
-bot.onText(/\/export/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (chatId.toString() !== ADMIN_ID) return;
+    if (!validateUsername(username)) {
+      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
+      return;
+    }
 
-  let csvData = 'Telegram ID,Telegram Username,Имя,Получил гайд,Язык,Дата регистрации,Последняя активность\n';
+    user.awaitingUsername = false;
+    user.instagramUsername = username;
 
-  for (const [userId, userData] of users) {
-    const row = [
-      userId,
-      userData.telegramUsername || '',
-      `"${((userData.firstName || '') + ' ' + (userData.lastName || '')).trim()}"`,
-      userData.hasReceivedGuide ? 'Да' : 'Нет',
-      userData.language,
-      userData.joinedAt.toLocaleDateString('ru'),
-      userData.lastActivity.toLocaleDateString('ru')
-    ].join(',');
+    await bot.sendMessage(chatId, MESSAGES[lang].checking);
 
-    csvData += row + '\n';
+    const checkResult = await checkBasicInstagramConditions(username);
+
+    if (checkResult.success) {
+      const guideKey = user.currentGuide;
+      const guide = GUIDES[guideKey];
+      const guideUrl = getGuideUrl(guideKey, lang);
+
+      if (!guide || !guideUrl) {
+        await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: гайд не знайдено' : 'Ошибка: гайд не найден');
+        return;
+      }
+
+      user.hasReceivedGuide = true;
+      if (!user.receivedGuides.includes(guideKey)) user.receivedGuides.push(guideKey);
+
+      const title = (lang === 'ua' ? guide.title_ua : guide.title_ru);
+
+      const successMessage = lang === 'ua'
+        ? `Вітаю! 🎉\n\n📥 Ось ваш гайд "${title}":\n\n${guideUrl}\n\nДякую за підписку! 💛`
+        : `Поздравляю! 🎉\n\n📥 Вот ваш гайд "${title}":\n\n${guideUrl}\n\nСпасибо за подписку! 💛`;
+
+      await bot.sendMessage(chatId, successMessage, getMainKeyboard(lang));
+    } else {
+      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
+    }
+    return;
   }
 
-  const buffer = Buffer.from(csvData, 'utf8');
-  const filename = `users_export_${new Date().toISOString().split('T')[0]}.csv`;
+  // --- menu ---
+  if (text && !text.startsWith('/')) {
+    switch (text) {
+      case '📚 Вибрати гайд':
+      case '📚 Выбрать гайд':
+        await bot.sendMessage(chatId, MESSAGES[lang].guidesList, getGuidesListKeyboard(lang));
+        break;
 
-  await bot.sendDocument(chatId, buffer, {}, { filename, contentType: 'text/csv' });
-});
+      case '👩‍⚕️ Про психолога':
+      case '👩‍⚕️ О психологе':
+        await bot.sendMessage(chatId, MESSAGES[lang].about);
+        break;
 
-bot.onText(/\/today/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (chatId.toString() !== ADMIN_ID) return;
+      case '📞 Контакти':
+      case '📞 Контакты':
+        await bot.sendMessage(chatId, MESSAGES[lang].contacts);
+        break;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+      case '🔄 Змінити мову':
+      case '🔄 Сменить язык':
+        await bot.sendMessage(chatId, 'Выберите язык / Оберіть мову:', languageKeyboard);
+        break;
 
-  const todayUsers = Array.from(users.values()).filter(u => u.joinedAt >= today);
-  const todayGuides = Array.from(users.values()).filter(u => u.hasReceivedGuide && u.lastActivity >= today);
+      case '🗓️ Записатися на безкоштовну консультацію':
+      case '🗓️ Записаться на бесплатную консультацию':
+        user.awaitingConsultation = true;
+        user.consultStep = 'contact';
+        user.consultData = { contact: '', age: '', problem: '' };
 
-  let message = `📊 Статистика за сегодня:
+        await bot.sendMessage(chatId, MESSAGES[lang].consultStart);
+        await bot.sendMessage(chatId, MESSAGES[lang].consultAskContact, contactKeyboard(lang));
+        break;
 
-🆕 Новых пользователей: ${todayUsers.length}
-📖 Получили гайд: ${todayGuides.length}
-
-Новые пользователи:`;
-
-  if (todayUsers.length === 0) {
-    message += '\nНовых пользователей сегодня нет';
-  } else {
-    todayUsers.forEach((user, index) => {
-      const name = user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Имя не указано';
-      const telegram = user.telegramUsername ? `@${user.telegramUsername}` : 'Нет username';
-      message += `\n${index + 1}. ${name} (${telegram})`;
-    });
+      default:
+        await bot.sendMessage(
+          chatId,
+          lang === 'ua'
+            ? 'Використовуйте кнопки меню для навігації 😊'
+            : 'Используйте кнопки меню для навигации 😊',
+          getMainKeyboard(lang)
+        );
+    }
   }
-
-  await bot.sendMessage(chatId, message);
 });
 
 // ===== HTTP server for Render =====
