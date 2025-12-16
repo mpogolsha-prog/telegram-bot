@@ -243,7 +243,7 @@ const MESSAGES = {
 • 5-річне навчання в методі психодинамічної інтегрованої психотерапії немовлят, дітей, підлітків і молоді в Секції дитячої та юнацької психотерапії УСП
 • Додаткова спеціалізована освіта з клінічної психології та психотерапії в психодинамічному підході
 • Підвищення кваліфікації з дитячої психопатології
-• Підвищення кваліфікації з нейропpsychологічної корекції дітей і дорослих
+• Підвищення кваліфікації з нейропсихологічної корекції дітей і дорослих
 • Навчання дитячої арт-терапії
 • Ведуча психологічної трансформаційної гри «У променях сонця»
 
@@ -505,7 +505,7 @@ ${d.problem}
         chat_id: chatId,
         message_id: callbackQuery.message.message_id
       });
-      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
+      await bot.sendMessage(chatId, '💙💛', getMainKeyboard(lang));
 
     } else if (data === 'consult_edit') {
       const lang = user.language;
@@ -529,12 +529,34 @@ ${d.problem}
         chat_id: chatId,
         message_id: callbackQuery.message.message_id
       });
-      await bot.sendMessage(chatId, '💙💛', getMainKeyboard(lang));
+      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
     }
 
   } catch (error) {
     console.log('Ошибка обработки callback:', error);
   }
+});
+
+// ✅ ВАЖНО: отдельный хендлер контакта (кнопка "Поделиться контактом")
+bot.on('contact', async (msg) => {
+  const chatId = msg.chat.id;
+  const user = getUser(chatId);
+  const lang = user.language;
+
+  if (!user.awaitingConsultation || user.consultStep !== 'contact') return;
+
+  const phone = msg.contact?.phone_number;
+  if (!phone) {
+    await bot.sendMessage(chatId, MESSAGES[lang].consultAskContact, contactKeyboard(lang));
+    return;
+  }
+
+  const normalized = phone.startsWith('+') ? phone : `+${phone}`;
+  user.consultData = user.consultData || { contact: '', age: '', problem: '' };
+  user.consultData.contact = normalized;
+
+  user.consultStep = 'age';
+  await bot.sendMessage(chatId, MESSAGES[lang].consultAskAge);
 });
 
 // ===== message =====
@@ -544,8 +566,6 @@ bot.on('message', async (msg) => {
 
   const user = getUser(chatId);
   const lang = user.language;
-
-  // контакт может прийти как msg.contact (даже без текста)
   const text = msg.text || '';
   user.lastActivity = new Date();
 
@@ -560,21 +580,17 @@ bot.on('message', async (msg) => {
 
   // --- консультация: шаги ---
   if (user.awaitingConsultation) {
+    // шаг contact: здесь обрабатываем только ручной ввод (контакт кнопкой ловится в bot.on('contact'))
     if (user.consultStep === 'contact') {
-      let contactValue = null;
-
-      if (msg.contact && msg.contact.phone_number) {
-        contactValue = `+${msg.contact.phone_number}`;
-      } else if (text && text.trim()) {
-        contactValue = text.trim();
-      }
-
+      const contactValue = (text || '').trim();
       if (!contactValue) {
         await bot.sendMessage(chatId, MESSAGES[lang].consultAskContact, contactKeyboard(lang));
         return;
       }
 
+      user.consultData = user.consultData || { contact: '', age: '', problem: '' };
       user.consultData.contact = contactValue;
+
       user.consultStep = 'age';
       await bot.sendMessage(chatId, MESSAGES[lang].consultAskAge);
       return;
@@ -610,7 +626,6 @@ bot.on('message', async (msg) => {
       return;
     }
 
-    // review шаг — ждём callback кнопок
     if (user.consultStep === 'review') {
       await bot.sendMessage(chatId, lang === 'ua'
         ? 'Натисніть кнопку ✅ Підтвердити або ✏️ Змінити дані.'
