@@ -161,7 +161,7 @@ const getGuidesListKeyboard = (lang) => {
     }]);
   }
   buttons.push([{
-    text: lang === 'ua' ? '🔙 Назад в меню' : '🔙 Назад в меню',
+    text: '🔙 Назад в меню',
     callback_data: 'back_to_menu'
   }]);
 
@@ -401,7 +401,6 @@ const getUser = (chatId) => {
       awaitingUsername: false,
       instagramUsername: null,
 
-      // консультация
       awaitingConsultation: false,
       consultStep: null, // 'contact' | 'age' | 'problem' | 'review'
       consultData: null
@@ -456,8 +455,6 @@ bot.on('callback_query', async (callbackQuery) => {
           parse_mode: 'HTML',
           ...getGuideKeyboard(guideKey, user.language)
         });
-      } else {
-        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Guide not found', show_alert: true });
       }
 
     } else if (data.startsWith('request:')) {
@@ -491,11 +488,7 @@ ${d.problem}
 
 🌐 Мова: ${lang}`;
 
-      try {
-        await bot.sendMessage(ADMIN_ID, adminMsg);
-      } catch (e) {
-        console.log('Admin notify error:', e.message);
-      }
+      try { await bot.sendMessage(ADMIN_ID, adminMsg); } catch (e) {}
 
       user.awaitingConsultation = false;
       user.consultStep = null;
@@ -505,7 +498,7 @@ ${d.problem}
         chat_id: chatId,
         message_id: callbackQuery.message.message_id
       });
-      await bot.sendMessage(chatId, '💙💛', getMainKeyboard(lang));
+      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
 
     } else if (data === 'consult_edit') {
       const lang = user.language;
@@ -537,7 +530,7 @@ ${d.problem}
   }
 });
 
-// ✅ ВАЖНО: отдельный хендлер контакта (кнопка "Поделиться контактом")
+// ✅ отдельный хендлер контакта
 bot.on('contact', async (msg) => {
   const chatId = msg.chat.id;
   const user = getUser(chatId);
@@ -569,7 +562,6 @@ bot.on('message', async (msg) => {
   const text = msg.text || '';
   user.lastActivity = new Date();
 
-  // --- отмена из клавиатуры контакта ---
   if (text === '❌ Скасувати' || text === '❌ Отмена') {
     user.awaitingConsultation = false;
     user.consultStep = null;
@@ -578,9 +570,8 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // --- консультация: шаги ---
+  // консультация
   if (user.awaitingConsultation) {
-    // шаг contact: здесь обрабатываем только ручной ввод (контакт кнопкой ловится в bot.on('contact'))
     if (user.consultStep === 'contact') {
       const contactValue = (text || '').trim();
       if (!contactValue) {
@@ -609,9 +600,10 @@ bot.on('message', async (msg) => {
       return;
     }
 
+    // ✅ FIX: убрали требование "минимум 5 символов"
     if (user.consultStep === 'problem') {
       const problem = (text || '').trim();
-      if (!problem || problem.length < 5) {
+      if (!problem) {
         await bot.sendMessage(chatId, MESSAGES[lang].consultAskProblem);
         return;
       }
@@ -635,7 +627,7 @@ bot.on('message', async (msg) => {
     }
   }
 
-  // --- IG username flow ---
+  // instagram username flow
   if (user.awaitingUsername && text && !text.startsWith('/')) {
     const username = text.trim().replace('@', '');
 
@@ -648,7 +640,6 @@ bot.on('message', async (msg) => {
     user.instagramUsername = username;
 
     await bot.sendMessage(chatId, MESSAGES[lang].checking);
-
     const checkResult = await checkBasicInstagramConditions(username);
 
     if (checkResult.success) {
@@ -665,7 +656,6 @@ bot.on('message', async (msg) => {
       if (!user.receivedGuides.includes(guideKey)) user.receivedGuides.push(guideKey);
 
       const title = (lang === 'ua' ? guide.title_ua : guide.title_ru);
-
       const successMessage = lang === 'ua'
         ? `Вітаю! 🎉\n\n📥 Ось ваш гайд "${title}":\n\n${guideUrl}\n\nДякую за підписку! 💛`
         : `Поздравляю! 🎉\n\n📥 Вот ваш гайд "${title}":\n\n${guideUrl}\n\nСпасибо за подписку! 💛`;
@@ -677,10 +667,11 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // --- menu ---
+  // меню
   if (text && !text.startsWith('/')) {
     switch (text) {
       case '📚 Вибрати гайд':
+      case '📚 Выбрать gайд':
       case '📚 Выбрать гайд':
         await bot.sendMessage(chatId, MESSAGES[lang].guidesList, getGuidesListKeyboard(lang));
         break;
