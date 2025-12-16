@@ -498,7 +498,7 @@ ${d.problem}
         chat_id: chatId,
         message_id: callbackQuery.message.message_id
       });
-      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
+      await bot.sendMessage(chatId, '💙💛', getMainKeyboard(lang));
 
     } else if (data === 'consult_edit') {
       const lang = user.language;
@@ -522,7 +522,7 @@ ${d.problem}
         chat_id: chatId,
         message_id: callbackQuery.message.message_id
       });
-      await bot.sendMessage(chatId, '👇', getMainKeyboard(lang));
+      await bot.sendMessage(chatId, '💙💛', getMainKeyboard(lang));
     }
 
   } catch (error) {
