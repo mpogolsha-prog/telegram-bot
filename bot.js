@@ -59,33 +59,31 @@ const escapeHTML = (s = '') =>
 const validateUsername = (username) => /^[a-zA-Z0-9._]{1,30}$/.test(username);
 
 // ===== Checklists (3 age groups) =====
-// По твоему требованию ссылки ОСТАЛИСЬ теми же, что были у гайда (UA/RU одинаково для всех возрастов)
+// ✅ Исправлено: у каждого чек-листа СВОЯ ссылка (как было на гайдах 7-10 / 11-15 / 16-18)
+// RU версий нет → fallback на UA
 const CHECKLISTS = {
   checklist_7_10: {
-    ua: 'https://kids-adaptation.netlify.app',
-    ru: 'https://kids-adaptation1.netlify.app',
+    ua: 'https://childpsy-guide7-10.netlify.app',
     title_ua: 'Чек-ліст 7–10 років',
     title_ru: 'Чек-лист 7–10 лет',
-    description_ua: 'Чек-ліст для батьків (7–10 років).',
-    description_ru: 'Чек-лист для родителей (7–10 лет).',
+    description_ua: 'Міні-опитувальник: чи потрібна дитині психологічна підтримка.',
+    description_ru: 'Мини-опросник: нужна ли ребенку психологическая поддержка.',
     emoji: '🧩'
   },
   checklist_11_15: {
-    ua: 'https://kids-adaptation.netlify.app',
-    ru: 'https://kids-adaptation1.netlify.app',
+    ua: 'https://childpsyguide11-15.netlify.app',
     title_ua: 'Чек-ліст 11–15 років',
     title_ru: 'Чек-лист 11–15 лет',
-    description_ua: 'Чек-ліст для батьків (11–15 років).',
-    description_ru: 'Чек-лист для родителей (11–15 лет).',
+    description_ua: 'Важкий вік чи тривожний дзвіночок? Чек-лист + результати.',
+    description_ru: 'Трудный возраст или тревожный сигнал? Чек-лист + результаты.',
     emoji: '🌀'
   },
   checklist_16_18: {
-    ua: 'https://kids-adaptation.netlify.app',
-    ru: 'https://kids-adaptation1.netlify.app',
+    ua: 'https://childspyguide16-18.netlify.app',
     title_ua: 'Чек-ліст 16–18 років',
     title_ru: 'Чек-лист 16–18 лет',
-    description_ua: 'Чек-ліст для батьків (16–18 років).',
-    description_ru: 'Чек-лист для родителей (16–18 лет).',
+    description_ua: 'Незалежність чи крик про допомогу? Чек-лист + інтерпретація.',
+    description_ru: 'Независимость или крик о помощи? Чек-лист + интерпретация.',
     emoji: '🔥'
   }
 };
@@ -93,6 +91,7 @@ const CHECKLISTS = {
 const getChecklistUrl = (key, lang) => {
   const item = CHECKLISTS[key];
   if (!item) return null;
+  // RU fallback на UA, если ru не задан
   return lang === 'ru' ? (item.ru || item.ua) : item.ua;
 };
 
@@ -171,9 +170,7 @@ const getChecklistsListKeyboard = (lang) => {
   const buttons = [];
   for (const [key, item] of Object.entries(CHECKLISTS)) {
     const title = lang === 'ua' ? item.title_ua : item.title_ru;
-    buttons.push([
-      { text: `${item.emoji} ${title}`, callback_data: `checklist:${key}` }
-    ]);
+    buttons.push([{ text: `${item.emoji} ${title}`, callback_data: `checklist:${key}` }]);
   }
   buttons.push([{ text: '🔙 Назад в меню', callback_data: 'back_to_menu' }]);
   return { reply_markup: { inline_keyboard: buttons } };
@@ -183,9 +180,7 @@ const getGuidesListKeyboard = (lang) => {
   const buttons = [];
   for (const [key, item] of Object.entries(GUIDES)) {
     const title = lang === 'ua' ? item.title_ua : item.title_ru;
-    buttons.push([
-      { text: `${item.emoji} ${title}`, callback_data: `guide:${key}` }
-    ]);
+    buttons.push([{ text: `${item.emoji} ${title}`, callback_data: `guide:${key}` }]);
   }
   buttons.push([{ text: '🔙 Назад в меню', callback_data: 'back_to_menu' }]);
   return { reply_markup: { inline_keyboard: buttons } };
@@ -259,10 +254,6 @@ const MESSAGES = {
     about: `👩‍⚕️ Про мене:
 
 Привіт! Мене звати Юлія Хацевич. Я - дитячий та юнацький психотерапевт в навчанні, психолог і нейрокорекційний спеціаліст.
-
-Я працюю з дітьми, підлітками та батьками, які стикаються з тривогою, агресією, емоційними зривами, труднощами в адаптації, навчанні, самооцінці чи поведінці. І не тільки: тіки, самоушкодження, гіперактивність, дефіцит уваги, затримки психічного розвитку, смоктання пальців, гризіння нігтів, енурези, страхи, булінг, втрати - робота моєї практики.
-
-💛 Моя мета - не «виправити» дитину, а допомогти їй зростати, розуміти себе і мати ресурс бути собою.
 
 📍 Працюю онлайн з родинами по всьому світу
 📍 Мови роботи: українська, російська, англійська`,
@@ -379,7 +370,7 @@ const getUser = (chatId) => {
       id: chatId,
       language: 'ua',
 
-      // чек-листы: просим Instagram
+      // checklists tracking
       hasReceivedChecklist: false,
       receivedChecklists: [],
       currentChecklist: null,
