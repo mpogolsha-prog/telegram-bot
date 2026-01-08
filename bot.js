@@ -51,62 +51,48 @@ bot.on('polling_error', async (err) => {
 const users = new Map();
 
 const escapeHTML = (s = '') =>
-  s.replace(/&/g, '&amp;')
-   .replace(/</g, '&lt;')
-   .replace(/>/g, '&gt;');
+  String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
 const validateUsername = (username) => /^[a-zA-Z0-9._]{1,30}$/.test(username);
 
-// Заглушка: твоя функция проверки Instagram (оставь свою реализацию)
-async function checkBasicInstagramConditions(username) {
-  return { success: true };
-}
-
-// ===== Guides =====
-const GUIDES = {
-  adaptation: {
+// ===== Checklists (links are same as old guide links) =====
+const CHECKLISTS = {
+  checklist_7_10: {
     ua: 'https://kids-adaptation.netlify.app',
     ru: 'https://kids-adaptation1.netlify.app',
-    title_ua: "Міцний зв'язок в нових обставинах",
-    title_ru: "Крепкая связь в новых обстоятельствах",
-    description_ua: "Керівництво з м'якої адаптації дітей до садочка або школи",
-    description_ru: "Руководство по мягкой адаптации детей к детскому саду или школе",
-    emoji: "🌿"
+    title_ua: 'Чек-ліст 7–10 років',
+    title_ru: 'Чек-лист 7–10 лет',
+    description_ua: 'Оберіть чек-ліст за віком дитини та отримайте посилання після введення Instagram username.',
+    description_ru: 'Выберите чек-лист по возрасту ребёнка и получите ссылку после ввода Instagram username.',
+    emoji: '🧩'
   },
-
-  guide_7_10: {
-    ua: "https://childpsy-guide7-10.netlify.app",
-    title_ua: "Гайд 7–10 років",
-    title_ru: "Гайд 7–10 лет",
-    description_ua: "Міні-опитувальник: чи потрібна дитині психологічна підтримка.",
-    description_ru: "Мини-опросник: нужна ли ребенку психологическая поддержка.",
-    emoji: "🧩"
+  checklist_11_15: {
+    ua: 'https://kids-adaptation.netlify.app',
+    ru: 'https://kids-adaptation1.netlify.app',
+    title_ua: 'Чек-ліст 11–15 років',
+    title_ru: 'Чек-лист 11–15 лет',
+    description_ua: 'Оберіть чек-ліст за віком дитини та отримайте посилання після введення Instagram username.',
+    description_ru: 'Выберите чек-лист по возрасту ребёнка и получите ссылку после ввода Instagram username.',
+    emoji: '🌀'
   },
-
-  guide_11_15: {
-    ua: "https://childpsyguide11-15.netlify.app",
-    title_ua: "Гайд 11–15 років",
-    title_ru: "Гайд 11–15 лет",
-    description_ua: "Важкий вік чи тривожний дзвіночок? Чек-лист + результати.",
-    description_ru: "Трудный возраст или тревожный сигнал? Чек-лист + результаты.",
-    emoji: "🌀"
-  },
-
-  guide_16_18: {
-    ua: "https://childspyguide16-18.netlify.app",
-    title_ua: "Гайд 16–18 років",
-    title_ru: "Гайд 16–18 лет",
-    description_ua: "Незалежність чи крик про допомогу? Чек-лист + інтерпретація.",
-    description_ru: "Независимость или крик о помощи? Чек-лист + интерпретация.",
-    emoji: "🔥"
+  checklist_16_18: {
+    ua: 'https://kids-adaptation.netlify.app',
+    ru: 'https://kids-adaptation1.netlify.app',
+    title_ua: 'Чек-ліст 16–18 років',
+    title_ru: 'Чек-лист 16–18 лет',
+    description_ua: 'Оберіть чек-ліст за віком дитини та отримайте посилання після введення Instagram username.',
+    description_ru: 'Выберите чек-лист по возрасту ребёнка и получите ссылку после ввода Instagram username.',
+    emoji: '🔥'
   }
 };
 
-// RU → fallback на UA (пока не добавишь ru версии)
-const getGuideUrl = (guideKey, lang) => {
-  const guide = GUIDES[guideKey];
-  if (!guide) return null;
-  return lang === 'ru' ? (guide.ru || guide.ua) : guide.ua;
+const getChecklistUrl = (key, lang) => {
+  const item = CHECKLISTS[key];
+  if (!item) return null;
+  return lang === 'ru' ? (item.ru || item.ua) : item.ua;
 };
 
 // ===== Keyboards =====
@@ -126,7 +112,7 @@ const getMainKeyboard = (lang) => {
     ua: {
       reply_markup: {
         keyboard: [
-          ['📚 Вибрати гайд'],
+          ['✅ Вибрати чек-ліст'],
           ['👩‍⚕️ Про психолога', '📞 Контакти'],
           ['🗓️ Записатися на безкоштовну консультацію'],
           ['🔄 Змінити мову']
@@ -138,7 +124,7 @@ const getMainKeyboard = (lang) => {
     ru: {
       reply_markup: {
         keyboard: [
-          ['📚 Выбрать гайд'],
+          ['✅ Выбрать чек-лист'],
           ['👩‍⚕️ О психологе', '📞 Контакты'],
           ['🗓️ Записаться на бесплатную консультацию'],
           ['🔄 Сменить язык']
@@ -151,36 +137,35 @@ const getMainKeyboard = (lang) => {
   return keyboards[lang];
 };
 
-const getGuidesListKeyboard = (lang) => {
+const getChecklistsListKeyboard = (lang) => {
   const buttons = [];
-  for (const [key, guide] of Object.entries(GUIDES)) {
-    const title = lang === 'ua' ? guide.title_ua : guide.title_ru;
-    buttons.push([{
-      text: `${guide.emoji} ${title}`,
-      callback_data: `guide:${key}`
-    }]);
+  for (const [key, item] of Object.entries(CHECKLISTS)) {
+    const title = lang === 'ua' ? item.title_ua : item.title_ru;
+    buttons.push([
+      {
+        text: `${item.emoji} ${title}`,
+        callback_data: `checklist:${key}`
+      }
+    ]);
   }
-  buttons.push([{
-    text: '🔙 Назад в меню',
-    callback_data: 'back_to_menu'
-  }]);
+
+  buttons.push([
+    {
+      text: '🔙 Назад в меню',
+      callback_data: 'back_to_menu'
+    }
+  ]);
 
   return { reply_markup: { inline_keyboard: buttons } };
 };
 
-const getGuideKeyboard = (guideKey, lang) => {
-  const url = getGuideUrl(guideKey, lang);
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: lang === 'ua' ? '📖 Відкрити гайд' : '📖 Открыть гайд', url }],
-        [{ text: lang === 'ua' ? '✅ Я виконав всі умови!' : '✅ Я выполнил все условия!', callback_data: `request:${guideKey}` }],
-        [{ text: '📱 Перейти в Instagram', url: INSTAGRAM_PROFILE }],
-        [{ text: lang === 'ua' ? '🔙 Назад до списку' : '🔙 Назад к списку', callback_data: 'show_guides' }]
-      ]
-    }
-  };
-};
+const getInstagramKeyboard = () => ({
+  reply_markup: {
+    inline_keyboard: [
+      [{ text: '📱 Перейти в Instagram', url: INSTAGRAM_PROFILE }]
+    ]
+  }
+});
 
 const contactKeyboard = (lang) => ({
   reply_markup: {
@@ -209,24 +194,19 @@ const MESSAGES = {
     welcome: `Привіт! 👋  
 Вітаю тебе у моєму боті 🌿  
 
-Тут ти можеш отримати мої безкоштовні гайди для батьків.
+Тут ти можеш отримати мої безкоштовні чек-лісти для батьків.
 
-📚 Натисни "Вибрати гайд" щоб побачити всі доступні матеріали!`,
+✅ Натисни "Вибрати чек-ліст" щоб побачити всі доступні матеріали!`,
 
-    guidesList: `📚 Доступні гайди:
+    checklistsList: `✅ Доступні чек-лісти:
 
-Оберіть гайд, який вас цікавить:`,
+Оберіть чек-ліст, який вас цікавить:`,
 
-    guideInfo: (guide) => `${guide.emoji} <b>${escapeHTML(guide.title_ua)}</b>
+    checklistInfo: (item) => `${item.emoji} <b>${escapeHTML(item.title_ua)}</b>
 
-📝 ${escapeHTML(guide.description_ua)}
+📝 ${escapeHTML(item.description_ua)}
 
-Щоб отримати цей гайд:
-✅ Підпишись на @childpsy_khatsevych в Instagram
-✅ Залиши лайк ❤️ під постом з анонсом гайда
-✅ Напиши у коментарях: «Хочу Гайд»
-
-Після виконання умов натисни кнопку "✅ Я виконав всі умови!"`,
+Щоб отримати чек-ліст, напишіть ваш Instagram username (без @).`,
 
     about: `👩‍⚕️ Про мене:
 
@@ -270,7 +250,7 @@ ${INSTAGRAM_PROFILE}
 
     enterUsername: 'Напишіть, будь ласка, ваш Instagram username (без @):',
     invalidUsername: 'Некоректний username. Спробуйте ще раз (без пробілів, без посилань).',
-    checking: 'Перевіряю... ⏳',
+    checking: 'Дякую! ⏳',
 
     consultStart: `🗓️ Запис на першу безкоштовну консультацію
 
@@ -298,24 +278,19 @@ ${escapeHTML(d.problem)}
     welcome: `Привет! 👋  
 Добро пожаловать в мой бот 🌿  
 
-Здесь ты можешь получить мои бесплатные гайды для родителей.
+Здесь ты можешь получить мои бесплатные чек-листы для родителей.
 
-📚 Нажми "Выбрать гайд" чтобы увидеть все доступные материалы!`,
+✅ Нажми "Выбрать чек-лист" чтобы увидеть все доступные материалы!`,
 
-    guidesList: `📚 Доступные гайды:
+    checklistsList: `✅ Доступные чек-листы:
 
-Выберите гайд, который вас интересует:`,
+Выберите чек-лист, который вас интересует:`,
 
-    guideInfo: (guide) => `${guide.emoji} <b>${escapeHTML(guide.title_ru)}</b>
+    checklistInfo: (item) => `${item.emoji} <b>${escapeHTML(item.title_ru)}</b>
 
-📝 ${escapeHTML(guide.description_ru)}
+📝 ${escapeHTML(item.description_ru)}
 
-Чтобы получить этот гайд:
-✅ Подпишись на @childpsy_khatsevych в Instagram
-✅ Поставь лайк ❤️ под постом с анонсом гайда
-✅ Напиши в комментариях: «Хочу Гайд»
-
-После выполнения условий нажми кнопку "✅ Я выполнил все условия!"`,
+Чтобы получить чек-лист, напишите ваш Instagram username (без @).`,
 
     about: `👩‍⚕️ Обо мне:
 
@@ -359,7 +334,7 @@ ${INSTAGRAM_PROFILE}
 
     enterUsername: 'Напишите ваш Instagram username (без @):',
     invalidUsername: 'Некорректный username. Попробуйте еще раз (без пробелов, без ссылок).',
-    checking: 'Проверяю... ⏳',
+    checking: 'Спасибо! ⏳',
 
     consultStart: `🗓️ Запись на первую бесплатную консультацию
 
@@ -390,17 +365,22 @@ const getUser = (chatId) => {
     users.set(chatId, {
       id: chatId,
       language: 'ua',
-      hasReceivedGuide: false,
-      receivedGuides: [],
+
+      // чек-листы
+      hasReceivedChecklist: false,
+      receivedChecklists: [],
+      currentChecklist: null,
+      awaitingInstagram: false,
+      instagramUsername: null,
+
+      // common
       joinedAt: new Date(),
       telegramUsername: null,
       firstName: null,
       lastName: null,
       lastActivity: new Date(),
-      currentGuide: null,
-      awaitingUsername: false,
-      instagramUsername: null,
 
+      // consultation
       awaitingConsultation: false,
       consultStep: null, // 'contact' | 'age' | 'problem' | 'review'
       consultData: null
@@ -436,33 +416,21 @@ bot.on('callback_query', async (callbackQuery) => {
       try { await bot.deleteMessage(chatId, callbackQuery.message.message_id); } catch (e) {}
       await bot.sendMessage(chatId, MESSAGES[lang].welcome, getMainKeyboard(lang));
 
-    } else if (data === 'show_guides') {
-      await bot.editMessageText(MESSAGES[user.language].guidesList, {
-        chat_id: chatId,
-        message_id: callbackQuery.message.message_id,
-        ...getGuidesListKeyboard(user.language)
-      });
+    } else if (data === 'show_checklists') {
+      await bot.answerCallbackQuery(callbackQuery.id);
+      await bot.sendMessage(chatId, MESSAGES[user.language].checklistsList, getChecklistsListKeyboard(user.language));
 
-    } else if (data.startsWith('guide:')) {
-      const guideKey = data.slice('guide:'.length);
-      const guide = GUIDES[guideKey];
+    } else if (data.startsWith('checklist:')) {
+      const key = data.slice('checklist:'.length);
+      const item = CHECKLISTS[key];
+      if (!item) return;
 
-      if (guide) {
-        user.currentGuide = guideKey;
-        await bot.editMessageText(MESSAGES[user.language].guideInfo(guide), {
-          chat_id: chatId,
-          message_id: callbackQuery.message.message_id,
-          parse_mode: 'HTML',
-          ...getGuideKeyboard(guideKey, user.language)
-        });
-      }
-
-    } else if (data.startsWith('request:')) {
-      const guideKey = data.slice('request:'.length);
-      user.currentGuide = guideKey;
-      user.awaitingUsername = true;
+      user.currentChecklist = key;
+      user.awaitingInstagram = true;
 
       await bot.answerCallbackQuery(callbackQuery.id);
+
+      await bot.sendMessage(chatId, MESSAGES[user.language].checklistInfo(item), { parse_mode: 'HTML' });
       await bot.sendMessage(chatId, MESSAGES[user.language].enterUsername);
 
     } else if (data === 'back_to_menu') {
@@ -600,7 +568,6 @@ bot.on('message', async (msg) => {
       return;
     }
 
-    // ✅ FIX: убрали требование "минимум 5 символов"
     if (user.consultStep === 'problem') {
       const problem = (text || '').trim();
       if (!problem) {
@@ -627,53 +594,46 @@ bot.on('message', async (msg) => {
     }
   }
 
-  // instagram username flow
-  if (user.awaitingUsername && text && !text.startsWith('/')) {
-    const username = text.trim().replace('@', '');
+  // Instagram username flow for checklist
+  if (user.awaitingInstagram && text && !text.startsWith('/')) {
+    const username = text.trim().replace(/^@+/, '');
 
     if (!validateUsername(username)) {
       await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
       return;
     }
 
-    user.awaitingUsername = false;
+    user.awaitingInstagram = false;
     user.instagramUsername = username;
 
-    await bot.sendMessage(chatId, MESSAGES[lang].checking);
-    const checkResult = await checkBasicInstagramConditions(username);
+    const key = user.currentChecklist;
+    const item = CHECKLISTS[key];
+    const url = getChecklistUrl(key, lang);
 
-    if (checkResult.success) {
-      const guideKey = user.currentGuide;
-      const guide = GUIDES[guideKey];
-      const guideUrl = getGuideUrl(guideKey, lang);
-
-      if (!guide || !guideUrl) {
-        await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: гайд не знайдено' : 'Ошибка: гайд не найден');
-        return;
-      }
-
-      user.hasReceivedGuide = true;
-      if (!user.receivedGuides.includes(guideKey)) user.receivedGuides.push(guideKey);
-
-      const title = (lang === 'ua' ? guide.title_ua : guide.title_ru);
-      const successMessage = lang === 'ua'
-        ? `Вітаю! 🎉\n\n📥 Ось ваш гайд "${title}":\n\n${guideUrl}\n\nДякую за підписку! 💛`
-        : `Поздравляю! 🎉\n\n📥 Вот ваш гайд "${title}":\n\n${guideUrl}\n\nСпасибо за подписку! 💛`;
-
-      await bot.sendMessage(chatId, successMessage, getMainKeyboard(lang));
-    } else {
-      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
+    if (!item || !url) {
+      await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: чек-ліст не знайдено' : 'Ошибка: чек-лист не найден');
+      return;
     }
+
+    user.hasReceivedChecklist = true;
+    if (!user.receivedChecklists.includes(key)) user.receivedChecklists.push(key);
+
+    const title = (lang === 'ua' ? item.title_ua : item.title_ru);
+    const successMessage = lang === 'ua'
+      ? `Дякую! 🎉\n\n📥 Ось ваш чек-ліст "${title}":\n\n${url}\n\nБуду вдячна за підписку на Instagram! 👇`
+      : `Спасибо! 🎉\n\n📥 Вот ваш чек-лист "${title}":\n\n${url}\n\nБуду благодарна за подписку на Instagram! 👇`;
+
+    await bot.sendMessage(chatId, successMessage, getInstagramKeyboard());
+    await bot.sendMessage(chatId, lang === 'ua' ? 'Головне меню:' : 'Главное меню:', getMainKeyboard(lang));
     return;
   }
 
   // меню
   if (text && !text.startsWith('/')) {
     switch (text) {
-      case '📚 Вибрати гайд':
-      case '📚 Выбрать gайд':
-      case '📚 Выбрать гайд':
-        await bot.sendMessage(chatId, MESSAGES[lang].guidesList, getGuidesListKeyboard(lang));
+      case '✅ Вибрати чек-ліст':
+      case '✅ Выбрать чек-лист':
+        await bot.sendMessage(chatId, MESSAGES[lang].checklistsList, getChecklistsListKeyboard(lang));
         break;
 
       case '👩‍⚕️ Про психолога':
@@ -683,7 +643,7 @@ bot.on('message', async (msg) => {
 
       case '📞 Контакти':
       case '📞 Контакты':
-        await bot.sendMessage(chatId, MESSAGES[lang].contacts);
+        await bot.sendMessage(chatId, MESSAGES[lang].contacts, getInstagramKeyboard());
         break;
 
       case '🔄 Змінити мову':
@@ -722,7 +682,7 @@ app.get('/', (req, res) => {
     status: 'Telegram Bot is running!',
     uptime: process.uptime(),
     users: users.size,
-    guidesGiven: Array.from(users.values()).filter(u => u.hasReceivedGuide).length
+    checklistsGiven: Array.from(users.values()).filter(u => u.hasReceivedChecklist).length
   });
 });
 
@@ -740,5 +700,5 @@ app.listen(PORT, '0.0.0.0', () => {
 
 console.log('🤖 Бот запущен!');
 console.log('📱 Instagram: @childpsy_khatsevych');
-console.log('📚 Количество гайдов:', Object.keys(GUIDES).length);
+console.log('✅ Количество чек-листов:', Object.keys(CHECKLISTS).length);
 console.log('✅ Администратор:', ADMIN_ID);
