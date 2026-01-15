@@ -238,7 +238,6 @@ const consultReviewKeyboard = (lang) => ({
 });
 
 // ===== Messages =====
-// ⚠️ Тексты не менял. Исправил только синтаксис: убрал запятые после template literals.
 const ABOUT_UA = `👩‍⚕️ Про мене:
 
 Привіт! Мене звати Юлія Хацевич. Я - дитячий та юнацький психотерапевт в навчанні, психолог і нейрокорекційний спеціаліст.
@@ -617,21 +616,45 @@ bot.on('callback_query', async (callbackQuery) => {
       return;
     }
 
+    // ✅ ИЗМЕНЕНО: чек-лист выдаём СРАЗУ, Instagram не спрашиваем
     if (data.startsWith('checklist:')) {
-      const key = data.slice('checklist:'.length);
-      const item = CHECKLISTS[key];
+      const checklistKey = data.slice('checklist:'.length);
+      const item = CHECKLISTS[checklistKey];
       if (!item) return;
 
       const lang = user.language || 'ua';
+      const url = getChecklistUrl(checklistKey, lang);
+
+      if (!url) {
+        await bot.answerCallbackQuery(callbackQuery.id);
+        await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: чек-ліст не знайдено' : 'Ошибка: чек-лист не найден');
+        return;
+      }
+
+      const received = Array.isArray(user.receivedChecklists) ? user.receivedChecklists : [];
+      if (!received.includes(checklistKey)) received.push(checklistKey);
 
       await saveUser(chatId, {
-        currentChecklist: key,
-        awaitingInstagramForChecklist: true
+        receivedChecklists: received,
+        currentChecklist: null,
+        awaitingInstagramForChecklist: false
       });
 
+      await checklistEventRef().set({
+        userId: String(chatId),
+        checklistKey,
+        checklistTitle: lang === 'ua' ? item.title_ua : item.title_ru,
+        instagramUsername: null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      const title = (lang === 'ua' ? item.title_ua : item.title_ru);
+      const successMessage = lang === 'ua'
+        ? `Дякую! 🎉\n\n📥 Ось ваш чек-ліст "${title}":\n\n${url}\n\nЯкщо буде потреба — напишіть мені в Instagram 💛`
+        : `Спасибо! 🎉\n\n📥 Вот ваш чек-лист "${title}":\n\n${url}\n\nЕсли понадобится — напишите мне в Instagram 💛`;
+
       await bot.answerCallbackQuery(callbackQuery.id);
-      await bot.sendMessage(chatId, MESSAGES[lang].checklistInfo(item), { parse_mode: 'HTML' });
-      await bot.sendMessage(chatId, MESSAGES[lang].enterUsername);
+      await bot.sendMessage(chatId, successMessage, getMainKeyboard(lang));
       return;
     }
 
@@ -843,53 +866,8 @@ bot.on('message', async (msg) => {
     }
   }
 
-  // ===== Instagram username for checklist =====
-  if (user.awaitingInstagramForChecklist && text && !text.startsWith('/')) {
-    const username = text.replace('@', '').trim();
-
-    if (!validateUsername(username)) {
-      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
-      return;
-    }
-
-    const checklistKey = user.currentChecklist;
-    const item = CHECKLISTS[checklistKey];
-    const url = getChecklistUrl(checklistKey, lang);
-
-    if (!item || !url) {
-      await saveUser(chatId, { awaitingInstagramForChecklist: false, currentChecklist: null });
-      await bot.sendMessage(chatId, lang === 'ua' ? 'Помилка: чек-ліст не знайдено' : 'Ошибка: чек-лист не найден');
-      return;
-    }
-
-    const received = Array.isArray(user.receivedChecklists) ? user.receivedChecklists : [];
-    if (!received.includes(checklistKey)) received.push(checklistKey);
-
-    await saveUser(chatId, {
-      instagramUsername: username,
-      receivedChecklists: received,
-      awaitingInstagramForChecklist: false,
-      currentChecklist: null
-    });
-
-    await checklistEventRef().set({
-      userId: String(chatId),
-      checklistKey,
-      checklistTitle: lang === 'ua' ? item.title_ua : item.title_ru,
-      instagramUsername: username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    await bot.sendMessage(chatId, MESSAGES[lang].checking);
-
-    const title = (lang === 'ua' ? item.title_ua : item.title_ru);
-    const successMessage = lang === 'ua'
-      ? `Дякую! 🎉\n\n📥 Ось ваш чек-ліст "${title}":\n\n${url}\n\nЯкщо буде потреба — напишіть мені в Instagram 💛`
-      : `Спасибо! 🎉\n\n📥 Вот ваш чек-лист "${title}":\n\n${url}\n\nЕсли понадобится — напишите мне в Instagram 💛`;
-
-    await bot.sendMessage(chatId, successMessage, getMainKeyboard(lang));
-    return;
-  }
+  // ✅ УДАЛЕНО: Instagram username flow for checklist
+  // Блок ожидания инсты больше не нужен, потому что чек-лист выдаётся сразу по кнопке.
 
   // ===== Menu buttons =====
   if (text && !text.startsWith('/')) {
@@ -969,5 +947,5 @@ app.listen(PORT, '0.0.0.0', () => {
 
 console.log('🤖 Бот запущен!');
 console.log('📱 Instagram: @childpsy_khatsevych');
-console.log('✅ Администратор:', ADMIN
+console.log('✅ Администратор:', ADMIN_ID);
 console.log('✅ Firestore: enabled');
