@@ -872,13 +872,6 @@ bot.on('message', async (msg) => {
   }
 
   // ===== Instagram username for checklist =====
-  if (user.awaitingInstagramForChecklist && text && !text.startsWith('/')) {
-    const username = text.replace('@', '').trim();
-
-    if (!validateUsername(username)) {
-      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
-      return;
-    }
 
     const checklistKey = user.currentChecklist;
     const item = CHECKLISTS[checklistKey];
