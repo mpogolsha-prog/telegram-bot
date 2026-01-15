@@ -616,23 +616,52 @@ bot.on('callback_query', async (callbackQuery) => {
       return;
     }
 
-    if (data.startsWith('checklist:')) {
-      const key = data.slice('checklist:'.length);
-      const item = CHECKLISTS[key];
-      if (!item) return;
+   if (data.startsWith('checklist:')) {
+  const checklistKey = data.slice('checklist:'.length);
+  const item = CHECKLISTS[checklistKey];
+  if (!item) return;
 
-      const lang = user.language || 'ua';
+  const lang = user.language || 'ua';
+  const url = getChecklistUrl(checklistKey, lang);
 
-      await saveUser(chatId, {
-        currentChecklist: key,
-        awaitingInstagramForChecklist: true
-      });
+  if (!url) {
+    await bot.sendMessage(
+      chatId,
+      lang === 'ua' ? 'Помилка: чек-ліст не знайдено' : 'Ошибка: чек-лист не найден'
+    );
+    return;
+  }
 
-      await bot.answerCallbackQuery(callbackQuery.id);
-      await bot.sendMessage(chatId, MESSAGES[lang].checklistInfo(item), { parse_mode: 'HTML' });
-      await bot.sendMessage(chatId, MESSAGES[lang].enterUsername);
-      return;
-    }
+  // сохраняем получение чек-листа
+  const received = Array.isArray(user.receivedChecklists) ? user.receivedChecklists : [];
+  if (!received.includes(checklistKey)) received.push(checklistKey);
+
+  await saveUser(chatId, {
+    receivedChecklists: received
+  });
+
+  // событие в Firestore
+  await checklistEventRef().set({
+    userId: String(chatId),
+    checklistKey,
+    checklistTitle: lang === 'ua' ? item.title_ua : item.title_ru,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  const title = lang === 'ua' ? item.title_ua : item.title_ru;
+  const message =
+    lang === 'ua'
+      ? `📥 <b>${title}</b>\n\n${url}`
+      : `📥 <b>${title}</b>\n\n${url}`;
+
+  await bot.answerCallbackQuery(callbackQuery.id);
+  await bot.sendMessage(chatId, message, {
+    parse_mode: 'HTML',
+    ...getMainKeyboard(lang)
+  });
+
+  return;
+}
 
     if (data.startsWith('guide:')) {
       const key = data.slice('guide:'.length);
