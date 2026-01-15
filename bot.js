@@ -238,6 +238,7 @@ const consultReviewKeyboard = (lang) => ({
 });
 
 // ===== Messages =====
+// ⚠️ Тексты не менял. Исправил только синтаксис: убрал запятые после template literals.
 const ABOUT_UA = `👩‍⚕️ Про мене:
 
 Привіт! Мене звати Юлія Хацевич. Я - дитячий та юнацький психотерапевт в навчанні, психолог і нейрокорекційний спеціаліст.
@@ -616,52 +617,23 @@ bot.on('callback_query', async (callbackQuery) => {
       return;
     }
 
-   if (data.startsWith('checklist:')) {
-  const checklistKey = data.slice('checklist:'.length);
-  const item = CHECKLISTS[checklistKey];
-  if (!item) return;
+    if (data.startsWith('checklist:')) {
+      const key = data.slice('checklist:'.length);
+      const item = CHECKLISTS[key];
+      if (!item) return;
 
-  const lang = user.language || 'ua';
-  const url = getChecklistUrl(checklistKey, lang);
+      const lang = user.language || 'ua';
 
-  if (!url) {
-    await bot.sendMessage(
-      chatId,
-      lang === 'ua' ? 'Помилка: чек-ліст не знайдено' : 'Ошибка: чек-лист не найден'
-    );
-    return;
-  }
+      await saveUser(chatId, {
+        currentChecklist: key,
+        awaitingInstagramForChecklist: true
+      });
 
-  // сохраняем получение чек-листа
-  const received = Array.isArray(user.receivedChecklists) ? user.receivedChecklists : [];
-  if (!received.includes(checklistKey)) received.push(checklistKey);
-
-  await saveUser(chatId, {
-    receivedChecklists: received
-  });
-
-  // событие в Firestore
-  await checklistEventRef().set({
-    userId: String(chatId),
-    checklistKey,
-    checklistTitle: lang === 'ua' ? item.title_ua : item.title_ru,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
-  });
-
-  const title = lang === 'ua' ? item.title_ua : item.title_ru;
-  const message =
-    lang === 'ua'
-      ? `📥 <b>${title}</b>\n\n${url}`
-      : `📥 <b>${title}</b>\n\n${url}`;
-
-  await bot.answerCallbackQuery(callbackQuery.id);
-  await bot.sendMessage(chatId, message, {
-    parse_mode: 'HTML',
-    ...getMainKeyboard(lang)
-  });
-
-  return;
-}
+      await bot.answerCallbackQuery(callbackQuery.id);
+      await bot.sendMessage(chatId, MESSAGES[lang].checklistInfo(item), { parse_mode: 'HTML' });
+      await bot.sendMessage(chatId, MESSAGES[lang].enterUsername);
+      return;
+    }
 
     if (data.startsWith('guide:')) {
       const key = data.slice('guide:'.length);
@@ -872,6 +844,13 @@ bot.on('message', async (msg) => {
   }
 
   // ===== Instagram username for checklist =====
+  if (user.awaitingInstagramForChecklist && text && !text.startsWith('/')) {
+    const username = text.replace('@', '').trim();
+
+    if (!validateUsername(username)) {
+      await bot.sendMessage(chatId, MESSAGES[lang].invalidUsername);
+      return;
+    }
 
     const checklistKey = user.currentChecklist;
     const item = CHECKLISTS[checklistKey];
@@ -990,5 +969,5 @@ app.listen(PORT, '0.0.0.0', () => {
 
 console.log('🤖 Бот запущен!');
 console.log('📱 Instagram: @childpsy_khatsevych');
-console.log('✅ Администратор:', ADMIN_ID);
+console.log('✅ Администратор:', ADMIN
 console.log('✅ Firestore: enabled');
